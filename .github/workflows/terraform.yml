@@ -19,7 +19,7 @@ on:
   workflow_dispatch:
     inputs:
       module:
-        description: 'Module to deploy (all, networking, serverless, server, lambda, edge, cognito, dynamodb, s3, sa-east-1)'
+        description: 'Module to deploy (all, global, region, data, security, compliance, observability, resilience, finops)'
         required: true
         default: 'all'
       action:
@@ -38,15 +38,15 @@ jobs:
     strategy:
       matrix:
         module:
-          - networking
-          - serverless
-          - server
-          - lambda
-          - edge
-          - cognito
-          - dynamodb
-          - s3
-          - sa-east-1
+          - modules/global
+          - modules/region
+          - modules/data
+          - modules/security
+          - modules/compliance
+          - modules/observability
+          - modules/resilience
+          - modules/finops
+      fail-fast: false
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -89,16 +89,8 @@ jobs:
     environment: staging
     strategy:
       matrix:
-        module:
-          - networking
-          - serverless
-          - server
-          - lambda
-          - edge
-          - cognito
-          - dynamodb
-          - s3
-          - sa-east-1
+        environment:
+          - dev
       fail-fast: false
     steps:
       - name: Checkout
@@ -117,12 +109,12 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Terraform Init
-        working-directory: ${{ matrix.module }}
+        working-directory: environments/${{ matrix.environment }}
         run: terraform init
 
       - name: Terraform Plan
         id: plan
-        working-directory: ${{ matrix.module }}
+        working-directory: environments/${{ matrix.environment }}
         run: |
           terraform plan -no-color -out=tfplan 2>&1 | tee plan.txt
         continue-on-error: true
@@ -130,8 +122,8 @@ jobs:
       - name: Upload Plan
         uses: actions/upload-artifact@v4
         with:
-          name: tfplan-${{ matrix.module }}
-          path: ${{ matrix.module }}/tfplan
+          name: tfplan-${{ matrix.environment }}
+          path: environments/${{ matrix.environment }}/tfplan
           retention-days: 5
 
       - name: Post Plan to PR
@@ -140,8 +132,8 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            const plan = fs.readFileSync('${{ matrix.module }}/plan.txt', 'utf8');
-            const output = `### Terraform Plan - ${{ matrix.module }}
+            const plan = fs.readFileSync('environments/${{ matrix.environment }}/plan.txt', 'utf8');
+            const output = `### Terraform Plan - ${{ matrix.environment }}
             
             \`\`\`
             ${plan.substring(0, 65000)}
@@ -164,16 +156,8 @@ jobs:
     environment: production
     strategy:
       matrix:
-        module:
-          - networking
-          - serverless
-          - server
-          - lambda
-          - edge
-          - cognito
-          - dynamodb
-          - s3
-          - sa-east-1
+        environment:
+          - prod
       max-parallel: 1
     steps:
       - name: Checkout
@@ -194,15 +178,15 @@ jobs:
       - name: Download Plan
         uses: actions/download-artifact@v4
         with:
-          name: tfplan-${{ matrix.module }}
-          path: ${{ matrix.module }}
+          name: tfplan-dev
+          path: environments/${{ matrix.environment }}
 
       - name: Terraform Init
-        working-directory: ${{ matrix.module }}
+        working-directory: environments/${{ matrix.environment }}
         run: terraform init
 
       - name: Terraform Apply
-        working-directory: ${{ matrix.module }}
+        working-directory: environments/${{ matrix.environment }}
         run: terraform apply -auto-approve tfplan
 
   security-scan:
