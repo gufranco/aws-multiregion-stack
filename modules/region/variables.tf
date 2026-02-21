@@ -50,6 +50,11 @@ variable "tier" {
 variable "cidr_block" {
   description = "CIDR block for the VPC"
   type        = string
+
+  validation {
+    condition     = can(cidrhost(var.cidr_block, 0))
+    error_message = "cidr_block must be a valid CIDR notation (e.g., 10.0.0.0/16)."
+  }
 }
 
 variable "enable_nat" {
@@ -129,9 +134,9 @@ variable "ecs_worker_memory" {
 }
 
 variable "ecs_enable_execute_command" {
-  description = "Enable ECS Exec for debugging"
+  description = "Enable ECS Exec for debugging (should be false in production)"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "use_fargate_spot" {
@@ -218,6 +223,11 @@ variable "database_port" {
   description = "Database port"
   type        = number
   default     = 5432
+
+  validation {
+    condition     = var.database_port > 0 && var.database_port <= 65535
+    error_message = "database_port must be between 1 and 65535."
+  }
 }
 
 variable "database_name" {

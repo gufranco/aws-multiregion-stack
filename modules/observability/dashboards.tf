@@ -15,7 +15,7 @@ resource "aws_cloudwatch_dashboard" "main" {
         width  = 24
         height = 1
         properties = {
-          markdown = "# ${var.project_name} - ${var.environment} - ${var.aws_region}\n**Region Dashboard** | Updated: ${timestamp()}"
+          markdown = "# ${var.project_name} - ${var.environment} - ${var.aws_region}\n**Region Dashboard**"
         }
       },
 

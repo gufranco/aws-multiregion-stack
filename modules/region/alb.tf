@@ -36,7 +36,7 @@ resource "aws_lb" "main" {
 
 resource "aws_lb_target_group" "api" {
   name        = "${local.name_prefix}-api-tg"
-  port        = 3000
+  port        = var.api_container_port
   protocol    = "HTTP"
   vpc_id      = aws_vpc.main.id
   target_type = "ip"
@@ -65,8 +65,10 @@ resource "aws_lb_target_group" "api" {
 }
 
 # -----------------------------------------------------------------------------
-# HTTP Listener (redirect to HTTPS)
+# HTTP Listener
 # -----------------------------------------------------------------------------
+# When a certificate is provided, redirects HTTP to HTTPS.
+# When no certificate is provided, forwards HTTP traffic directly.
 
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
@@ -74,13 +76,18 @@ resource "aws_lb_listener" "http" {
   protocol          = "HTTP"
 
   default_action {
-    type = "redirect"
+    type = var.acm_certificate_arn != "" ? "redirect" : "forward"
 
-    redirect {
-      port        = "443"
-      protocol    = "HTTPS"
-      status_code = "HTTP_301"
+    dynamic "redirect" {
+      for_each = var.acm_certificate_arn != "" ? [1] : []
+      content {
+        port        = "443"
+        protocol    = "HTTPS"
+        status_code = "HTTP_301"
+      }
     }
+
+    target_group_arn = var.acm_certificate_arn == "" ? aws_lb_target_group.api.arn : null
   }
 
   tags = merge(local.common_tags, var.tags, {
@@ -111,46 +118,11 @@ resource "aws_lb_listener" "https" {
   })
 }
 
-# Fallback HTTP listener for forward (when no certificate)
-resource "aws_lb_listener" "http_forward" {
-  count = var.acm_certificate_arn == "" ? 1 : 0
-
-  load_balancer_arn = aws_lb.main.arn
-  port              = 80
-  protocol          = "HTTP"
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.api.arn
-  }
-
-  tags = merge(local.common_tags, var.tags, {
-    Name = "${local.name_prefix}-http-forward-listener"
-  })
-}
-
 # -----------------------------------------------------------------------------
 # Global Accelerator Endpoint
 # -----------------------------------------------------------------------------
-
-resource "aws_globalaccelerator_endpoint_group" "alb" {
-  count = var.global_accelerator_endpoint_group_arn != "" ? 1 : 0
-
-  listener_arn          = var.global_accelerator_endpoint_group_arn
-  endpoint_group_region = var.aws_region
-
-  endpoint_configuration {
-    endpoint_id                    = aws_lb.main.arn
-    weight                         = 100
-    client_ip_preservation_enabled = true
-  }
-
-  health_check_interval_seconds = 30
-  health_check_path             = "/health"
-  health_check_port             = var.acm_certificate_arn != "" ? 443 : 80
-  health_check_protocol         = var.acm_certificate_arn != "" ? "HTTPS" : "HTTP"
-  threshold_count               = 3
-}
+# Endpoint groups are created by the global module. The ALB ARN is exported
+# as an output so the global module can attach it as an endpoint.
 
 # -----------------------------------------------------------------------------
 # Route53 Record for Regional ALB

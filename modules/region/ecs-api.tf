@@ -101,7 +101,7 @@ resource "aws_ecs_service" "api" {
   load_balancer {
     target_group_arn = aws_lb_target_group.api.arn
     container_name   = "api"
-    container_port   = 3000
+    container_port   = var.api_container_port
   }
 
   deployment_maximum_percent         = 200

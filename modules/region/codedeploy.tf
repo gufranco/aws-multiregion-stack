@@ -22,7 +22,7 @@ resource "aws_codedeploy_app" "api" {
 # -----------------------------------------------------------------------------
 
 resource "aws_codedeploy_deployment_group" "api" {
-  count = var.enable_blue_green ? 1 : 0
+  count = var.enable_blue_green && var.acm_certificate_arn != "" ? 1 : 0
 
   app_name               = aws_codedeploy_app.api[0].name
   deployment_group_name  = "${local.name_prefix}-api"

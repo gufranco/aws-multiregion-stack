@@ -10,6 +10,7 @@ resource "aws_sqs_queue" "dlq" {
   name                       = "${local.name_prefix}-dlq"
   message_retention_seconds  = 1209600 # 14 days
   visibility_timeout_seconds = 60
+  sqs_managed_sse_enabled    = true
 
   tags = merge(local.common_tags, var.tags, {
     Name = "${local.name_prefix}-dlq"
@@ -26,6 +27,7 @@ resource "aws_sqs_queue" "order_processing" {
   message_retention_seconds  = var.sqs_message_retention_seconds
   visibility_timeout_seconds = var.sqs_visibility_timeout_seconds
   receive_wait_time_seconds  = 20 # Long polling
+  sqs_managed_sse_enabled    = true
 
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.dlq.arn
@@ -47,6 +49,7 @@ resource "aws_sqs_queue" "notification" {
   message_retention_seconds  = var.sqs_message_retention_seconds
   visibility_timeout_seconds = var.sqs_visibility_timeout_seconds
   receive_wait_time_seconds  = 20
+  sqs_managed_sse_enabled    = true
 
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.dlq.arn
@@ -71,6 +74,7 @@ resource "aws_sqs_queue" "order_fifo" {
   visibility_timeout_seconds  = var.sqs_visibility_timeout_seconds
   deduplication_scope         = "messageGroup"
   fifo_throughput_limit       = "perMessageGroupId"
+  sqs_managed_sse_enabled     = true
 
   tags = merge(local.common_tags, var.tags, {
     Name = "${local.name_prefix}-order-fifo"

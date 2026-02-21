@@ -121,6 +121,12 @@ variable "ecr_lifecycle_policy_count" {
   default     = 30
 }
 
+variable "ecr_kms_key_arn" {
+  description = "KMS key ARN for ECR encryption (leave empty for AES256)"
+  type        = string
+  default     = ""
+}
+
 # -----------------------------------------------------------------------------
 # CloudFront Configuration (Optional)
 # -----------------------------------------------------------------------------

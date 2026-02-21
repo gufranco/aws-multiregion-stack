@@ -33,18 +33,18 @@ output "global_accelerator_ip_addresses" {
 
 output "global_accelerator_listener_http_arn" {
   description = "ARN of the HTTP listener"
-  value       = var.enable_global_accelerator ? aws_globalaccelerator_listener.http[0].id : null
+  value       = var.enable_global_accelerator ? aws_globalaccelerator_listener.http[0].arn : null
 }
 
 output "global_accelerator_listener_https_arn" {
   description = "ARN of the HTTPS listener"
-  value       = var.enable_global_accelerator ? aws_globalaccelerator_listener.https[0].id : null
+  value       = var.enable_global_accelerator ? aws_globalaccelerator_listener.https[0].arn : null
 }
 
 output "global_accelerator_endpoint_groups" {
   description = "Map of regional endpoint group ARNs"
   value = var.enable_global_accelerator ? {
-    for key, eg in aws_globalaccelerator_endpoint_group.regions : key => eg.id
+    for key, eg in aws_globalaccelerator_endpoint_group.regions : key => eg.arn
   } : {}
 }
 

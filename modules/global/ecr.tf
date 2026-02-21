@@ -21,10 +21,8 @@ resource "aws_ecr_repository" "main" {
   }
 
   encryption_configuration {
-    encryption_type = "AES256"
-    # For KMS encryption, use:
-    # encryption_type = "KMS"
-    # kms_key        = var.ecr_kms_key_arn
+    encryption_type = var.ecr_kms_key_arn != "" ? "KMS" : "AES256"
+    kms_key         = var.ecr_kms_key_arn != "" ? var.ecr_kms_key_arn : null
   }
 
   tags = merge(local.common_tags, var.tags, {

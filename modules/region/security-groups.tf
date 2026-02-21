@@ -41,8 +41,8 @@ resource "aws_vpc_security_group_ingress_rule" "alb_https" {
 resource "aws_vpc_security_group_egress_rule" "alb_to_ecs" {
   security_group_id            = aws_security_group.alb.id
   description                  = "To ECS tasks"
-  from_port                    = 3000
-  to_port                      = 3000
+  from_port                    = var.api_container_port
+  to_port                      = var.api_container_port
   ip_protocol                  = "tcp"
   referenced_security_group_id = aws_security_group.ecs_api.id
 
@@ -66,8 +66,8 @@ resource "aws_security_group" "ecs_api" {
 resource "aws_vpc_security_group_ingress_rule" "ecs_api_from_alb" {
   security_group_id            = aws_security_group.ecs_api.id
   description                  = "From ALB"
-  from_port                    = 3000
-  to_port                      = 3000
+  from_port                    = var.api_container_port
+  to_port                      = var.api_container_port
   ip_protocol                  = "tcp"
   referenced_security_group_id = aws_security_group.alb.id
 

@@ -49,6 +49,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "cloudtrail" {
     id     = "archive-old-logs"
     status = "Enabled"
 
+    filter {}
+
     transition {
       days          = var.s3_archive_days
       storage_class = "GLACIER"
@@ -116,13 +118,13 @@ resource "aws_cloudtrail" "main" {
 
     data_resource {
       type   = "AWS::S3::Object"
-      values = ["arn:aws:s3"]
+      values = ["arn:aws:s3:::"]
     }
   }
 
   event_selector {
     read_write_type           = "All"
-    include_management_events = true
+    include_management_events = false
 
     data_resource {
       type   = "AWS::DynamoDB::Table"

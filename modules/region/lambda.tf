@@ -214,7 +214,7 @@ resource "aws_lambda_event_source_mapping" "dlq_handler" {
 
 data "archive_file" "lambda_placeholder" {
   type        = "zip"
-  output_path = "${path.module}/lambda_placeholder.zip"
+  output_path = "/tmp/terraform-${var.project_name}-lambda-placeholder.zip"
 
   source {
     content  = <<-EOF
