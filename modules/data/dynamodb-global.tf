@@ -136,6 +136,11 @@ resource "aws_dynamodb_table" "orders" {
     type = "S"
   }
 
+  attribute {
+    name = "entityType"
+    type = "S"
+  }
+
   # GSI for querying orders by customer
   global_secondary_index {
     name            = "CustomerOrders"
@@ -151,6 +156,17 @@ resource "aws_dynamodb_table" "orders" {
   global_secondary_index {
     name            = "StatusIndex"
     hash_key        = "status"
+    range_key       = "createdAt"
+    projection_type = "ALL"
+
+    read_capacity  = var.dynamodb_billing_mode == "PROVISIONED" ? var.dynamodb_read_capacity : null
+    write_capacity = var.dynamodb_billing_mode == "PROVISIONED" ? var.dynamodb_write_capacity : null
+  }
+
+  # GSI for listing all orders without a full table scan
+  global_secondary_index {
+    name            = "AllOrders"
+    hash_key        = "entityType"
     range_key       = "createdAt"
     projection_type = "ALL"
 
