@@ -29,58 +29,47 @@ terraform {
 # Provider Configuration
 # -----------------------------------------------------------------------------
 
+# Single provider that targets LocalStack when use_localstack=true,
+# or real AWS when use_localstack=false. Provider references in module
+# blocks must be static, so we consolidate into one configurable provider.
 provider "aws" {
   region = local.primary_region
 
-  default_tags {
-    tags = {
-      Project     = var.project_name
-      Environment = var.environment
-      ManagedBy   = "terraform"
-    }
-  }
-}
-
-# LocalStack provider for local development
-provider "aws" {
-  alias  = "localstack"
-  region = local.primary_region
-
-  access_key                  = "test"
-  secret_key                  = "test"
-  skip_credentials_validation = true
-  skip_metadata_api_check     = true
-  skip_requesting_account_id  = true
+  access_key                  = var.use_localstack ? "test" : null
+  secret_key                  = var.use_localstack ? "test" : null
+  skip_credentials_validation = var.use_localstack
+  skip_metadata_api_check     = var.use_localstack
+  skip_requesting_account_id  = var.use_localstack
 
   endpoints {
-    acm                    = var.localstack_endpoint
-    apigateway             = var.localstack_endpoint
-    cloudformation         = var.localstack_endpoint
-    cloudwatch             = var.localstack_endpoint
-    cloudwatchlogs         = var.localstack_endpoint
-    dynamodb               = var.localstack_endpoint
-    ec2                    = var.localstack_endpoint
-    ecr                    = var.localstack_endpoint
-    ecs                    = var.localstack_endpoint
-    elasticache            = var.localstack_endpoint
-    elasticloadbalancing   = var.localstack_endpoint
-    elasticloadbalancingv2 = var.localstack_endpoint
-    events                 = var.localstack_endpoint
-    globalaccelerator      = var.localstack_endpoint
-    iam                    = var.localstack_endpoint
-    kinesis                = var.localstack_endpoint
-    kms                    = var.localstack_endpoint
-    lambda                 = var.localstack_endpoint
-    rds                    = var.localstack_endpoint
-    route53                = var.localstack_endpoint
-    s3                     = var.localstack_endpoint
-    secretsmanager         = var.localstack_endpoint
-    ses                    = var.localstack_endpoint
-    sns                    = var.localstack_endpoint
-    sqs                    = var.localstack_endpoint
-    ssm                    = var.localstack_endpoint
-    stepfunctions          = var.localstack_endpoint
-    sts                    = var.localstack_endpoint
+    acm                    = var.use_localstack ? var.localstack_endpoint : null
+    apigateway             = var.use_localstack ? var.localstack_endpoint : null
+    cloudformation         = var.use_localstack ? var.localstack_endpoint : null
+    cloudwatch             = var.use_localstack ? var.localstack_endpoint : null
+    cloudwatchlogs         = var.use_localstack ? var.localstack_endpoint : null
+    dynamodb               = var.use_localstack ? var.localstack_endpoint : null
+    ec2                    = var.use_localstack ? var.localstack_endpoint : null
+    ecr                    = var.use_localstack ? var.localstack_endpoint : null
+    ecs                    = var.use_localstack ? var.localstack_endpoint : null
+    elasticache            = var.use_localstack ? var.localstack_endpoint : null
+    elasticloadbalancing   = var.use_localstack ? var.localstack_endpoint : null
+    elasticloadbalancingv2 = var.use_localstack ? var.localstack_endpoint : null
+    events                 = var.use_localstack ? var.localstack_endpoint : null
+    globalaccelerator      = var.use_localstack ? var.localstack_endpoint : null
+    iam                    = var.use_localstack ? var.localstack_endpoint : null
+    kinesis                = var.use_localstack ? var.localstack_endpoint : null
+    kms                    = var.use_localstack ? var.localstack_endpoint : null
+    lambda                 = var.use_localstack ? var.localstack_endpoint : null
+    rds                    = var.use_localstack ? var.localstack_endpoint : null
+    route53                = var.use_localstack ? var.localstack_endpoint : null
+    s3                     = var.use_localstack ? var.localstack_endpoint : null
+    secretsmanager         = var.use_localstack ? var.localstack_endpoint : null
+    ses                    = var.use_localstack ? var.localstack_endpoint : null
+    sns                    = var.use_localstack ? var.localstack_endpoint : null
+    sqs                    = var.use_localstack ? var.localstack_endpoint : null
+    ssm                    = var.use_localstack ? var.localstack_endpoint : null
+    stepfunctions          = var.use_localstack ? var.localstack_endpoint : null
+    sts                    = var.use_localstack ? var.localstack_endpoint : null
   }
 
   default_tags {
@@ -113,9 +102,7 @@ locals {
 module "global" {
   source = "../../modules/global"
 
-  providers = {
-    aws = var.use_localstack ? aws.localstack : aws
-  }
+  # Provider configured via use_localstack variable
 
   project_name              = var.project_name
   environment               = var.environment
@@ -137,9 +124,7 @@ module "region_us_east_1" {
   source = "../../modules/region"
   count  = lookup(var.regions, "us_east_1", { enabled = false }).enabled ? 1 : 0
 
-  providers = {
-    aws = var.use_localstack ? aws.localstack : aws
-  }
+  # Provider configured via use_localstack variable
 
   project_name = var.project_name
   environment  = var.environment
@@ -178,9 +163,7 @@ module "region_us_east_1" {
 module "data" {
   source = "../../modules/data"
 
-  providers = {
-    aws = var.use_localstack ? aws.localstack : aws
-  }
+  # Provider configured via use_localstack variable
 
   project_name = var.project_name
   environment  = var.environment

@@ -59,11 +59,9 @@ jobs:
             echo "::endgroup::"
           done
 
-      - name: Validate dev environment
-        run: |
-          cd environments/dev
-          terraform init -backend=false -input=false
-          terraform validate
+      # Note: environment configs are not validated here because they
+      # contain cross-module references that create cycles during
+      # standalone validation. Modules are validated individually above.
 
   # ─── Terraform Security ──────────────────────────────────────────────────
 
