@@ -2,6 +2,7 @@
 # Worker Dockerfile
 # =============================================================================
 # Multi-stage build for production-ready Node.js Worker container
+# Build context: app/ (the workspace root)
 # =============================================================================
 
 # Stage 1: Build
@@ -13,23 +14,20 @@ RUN corepack enable && corepack prepare pnpm@8.15.0 --activate
 WORKDIR /app
 
 # Copy workspace files
-COPY package.json pnpm-workspace.yaml ./
-COPY app/package.json ./app/
-COPY app/shared/package.json ./app/shared/
-COPY app/worker/package.json ./app/worker/
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY shared/package.json ./shared/
+COPY worker/package.json ./worker/
 
 # Install dependencies
 RUN pnpm install --frozen-lockfile
 
 # Copy source code
-COPY app/shared ./app/shared
-COPY app/worker ./app/worker
+COPY shared ./shared
+COPY worker ./worker
 
-# Build shared library
-RUN cd app/shared && pnpm build
-
-# Build Worker
-RUN cd app/worker && pnpm build
+# Build shared library first, then Worker
+RUN cd shared && pnpm build
+RUN cd worker && pnpm build
 
 # Stage 2: Production
 FROM node:20-alpine AS production
@@ -43,14 +41,20 @@ RUN addgroup -g 1001 -S nodejs && \
 
 WORKDIR /app
 
-# Copy production dependencies
+# Copy workspace config and dependencies
 COPY --from=builder /app/package.json ./
 COPY --from=builder /app/pnpm-workspace.yaml ./
 COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/app/shared/package.json ./app/shared/
-COPY --from=builder /app/app/shared/dist ./app/shared/dist
-COPY --from=builder /app/app/worker/package.json ./app/worker/
-COPY --from=builder /app/app/worker/dist ./app/worker/dist
+
+# Copy shared library build output
+COPY --from=builder /app/shared/package.json ./shared/
+COPY --from=builder /app/shared/dist ./shared/dist
+COPY --from=builder /app/shared/node_modules ./shared/node_modules
+
+# Copy Worker build output
+COPY --from=builder /app/worker/package.json ./worker/
+COPY --from=builder /app/worker/dist ./worker/dist
+COPY --from=builder /app/worker/node_modules ./worker/node_modules
 
 # Set ownership
 RUN chown -R nodejs:nodejs /app
@@ -62,5 +66,5 @@ USER nodejs
 ENV NODE_ENV=production
 
 # Start the worker
-WORKDIR /app/app/worker
+WORKDIR /app/worker
 CMD ["node", "dist/index.js"]

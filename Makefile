@@ -48,14 +48,14 @@ output: ## Show Terraform outputs for current environment
 # =============================================================================
 
 init-modules: ## Initialize all Terraform modules
-	@for dir in modules/global modules/region modules/data modules/security modules/compliance modules/observability modules/resilience modules/finops; do \
+	@for dir in modules/global modules/region modules/data modules/data-replica modules/security modules/compliance modules/observability modules/resilience modules/finops; do \
 		echo "Initializing $$dir..."; \
 		(cd $$dir && terraform init -backend=false) || exit 1; \
 	done
 	@echo "All modules initialized successfully"
 
 validate-modules: ## Validate all Terraform modules
-	@for dir in modules/global modules/region modules/data modules/security modules/compliance modules/observability modules/resilience modules/finops; do \
+	@for dir in modules/global modules/region modules/data modules/data-replica modules/security modules/compliance modules/observability modules/resilience modules/finops; do \
 		echo "Validating $$dir..."; \
 		(cd $$dir && terraform validate) || exit 1; \
 	done
@@ -126,8 +126,8 @@ localstack-init: ## Run init scripts for all regions
 # =============================================================================
 
 app-build: ## Build application Docker images
-	cd app && docker --context $(DOCKER_CONTEXT) build -t multiregion-api ./api
-	cd app && docker --context $(DOCKER_CONTEXT) build -t multiregion-worker ./worker
+	cd app && docker --context $(DOCKER_CONTEXT) build -t blueprint-api -f api/Dockerfile .
+	cd app && docker --context $(DOCKER_CONTEXT) build -t blueprint-worker -f worker/Dockerfile .
 	@echo "Images built successfully"
 
 app-up: ## Start application services
@@ -223,7 +223,7 @@ print-port-af-south-1:
 # =============================================================================
 
 db-connect: ## Connect to PostgreSQL
-	docker --context $(DOCKER_CONTEXT) exec -it multiregion-postgres psql -U postgres -d app
+	docker --context $(DOCKER_CONTEXT) exec -it blueprint-postgres psql -U postgres -d app
 
 db-migrate: ## Run database migrations
 	cd app && pnpm db:migrate
@@ -232,11 +232,11 @@ db-seed: ## Seed database with sample data
 	cd app && pnpm db:seed
 
 db-reset: ## Reset database (drop and recreate)
-	docker --context $(DOCKER_CONTEXT) exec -it multiregion-postgres psql -U postgres -c "DROP DATABASE IF EXISTS app; CREATE DATABASE app;"
+	docker --context $(DOCKER_CONTEXT) exec -it blueprint-postgres psql -U postgres -c "DROP DATABASE IF EXISTS app; CREATE DATABASE app;"
 	@make db-migrate db-seed
 
 redis-cli: ## Connect to Redis CLI
-	docker --context $(DOCKER_CONTEXT) exec -it multiregion-redis redis-cli
+	docker --context $(DOCKER_CONTEXT) exec -it blueprint-redis redis-cli
 
 # =============================================================================
 # Testing

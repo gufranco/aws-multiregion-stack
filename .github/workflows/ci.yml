@@ -1,0 +1,266 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Jobs
+# ─────────────────────────────────────────────────────────────────────────────
+
+jobs:
+
+  # ─── Terraform Format ────────────────────────────────────────────────────
+
+  terraform-fmt:
+    name: Terraform Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.6.0"
+
+      - name: Check formatting
+        run: terraform fmt -recursive -check
+
+  # ─── Terraform Validate ──────────────────────────────────────────────────
+
+  terraform-validate:
+    name: Terraform Validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.6.0"
+
+      - name: Validate all modules
+        run: |
+          for dir in modules/*/; do
+            echo "::group::Validating $dir"
+            cd "$dir"
+            terraform init -backend=false -input=false
+            terraform validate
+            cd "$GITHUB_WORKSPACE"
+            echo "::endgroup::"
+          done
+
+      - name: Validate dev environment
+        run: |
+          cd environments/dev
+          terraform init -backend=false -input=false
+          terraform validate
+
+  # ─── Terraform Security ──────────────────────────────────────────────────
+
+  terraform-security:
+    name: Terraform Security
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy IaC scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: config
+          scan-ref: .
+          severity: CRITICAL
+          exit-code: 1
+
+  # ─── Application Build ──────────────────────────────────────────────────
+
+  app-build:
+    name: Build & Typecheck
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 8
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: app/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+  # ─── Application Lint ────────────────────────────────────────────────────
+
+  app-lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 8
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: app/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+  # ─── Application Test ───────────────────────────────────────────────────
+
+  app-test:
+    name: Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 8
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: app/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build (shared dependency)
+        run: pnpm build
+
+      - name: Run tests
+        run: pnpm test
+
+  # ─── Docker Build ───────────────────────────────────────────────────────
+
+  docker-build:
+    name: Docker Build (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [api, worker]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build ${{ matrix.service }} image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./app
+          file: ./app/${{ matrix.service }}/Dockerfile
+          push: false
+          tags: blueprint-${{ matrix.service }}:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ─── Security Audit ─────────────────────────────────────────────────────
+
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 8
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: app/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: cd app && pnpm install --frozen-lockfile
+
+      - name: pnpm audit
+        run: cd app && pnpm audit --audit-level=critical
+        continue-on-error: true
+
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: app
+          severity: CRITICAL
+          exit-code: 0
+
+  # ─── CI Gate ─────────────────────────────────────────────────────────────
+
+  ci-pass:
+    name: CI Pass
+    if: always()
+    needs:
+      - terraform-fmt
+      - terraform-validate
+      - terraform-security
+      - app-build
+      - app-lint
+      - app-test
+      - docker-build
+      - security-audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check all jobs
+        run: |
+          echo "Terraform Format: ${{ needs.terraform-fmt.result }}"
+          echo "Terraform Validate: ${{ needs.terraform-validate.result }}"
+          echo "Terraform Security: ${{ needs.terraform-security.result }}"
+          echo "App Build: ${{ needs.app-build.result }}"
+          echo "App Lint: ${{ needs.app-lint.result }}"
+          echo "App Test: ${{ needs.app-test.result }}"
+          echo "Docker Build: ${{ needs.docker-build.result }}"
+          echo "Security Audit: ${{ needs.security-audit.result }}"
+
+          # Fail if any required job failed
+          # terraform-security and security-audit are advisory (continue-on-error)
+          if [[ "${{ needs.terraform-fmt.result }}" == "failure" ]] || \
+             [[ "${{ needs.terraform-validate.result }}" == "failure" ]] || \
+             [[ "${{ needs.app-build.result }}" == "failure" ]] || \
+             [[ "${{ needs.app-lint.result }}" == "failure" ]] || \
+             [[ "${{ needs.app-test.result }}" == "failure" ]] || \
+             [[ "${{ needs.docker-build.result }}" == "failure" ]]; then
+            echo "::error::One or more required jobs failed"
+            exit 1
+          fi
+
+          echo "All required checks passed"

@@ -1,6 +1,95 @@
-# AWS Multi-Region Stack
+# AWS Global Blueprint
 
-A production-grade, multi-region AWS infrastructure stack using Terraform, ECS Fargate, and event-driven architecture. Designed for high availability, horizontal scaling, and global distribution.
+[![Terraform](https://img.shields.io/badge/Terraform-%3E%3D1.5-844FBA?logo=terraform&logoColor=white)](#prerequisites)
+[![AWS](https://img.shields.io/badge/AWS-6%2B_Regions-FF9900?logo=amazonwebservices&logoColor=white)](#supported-aws-regions)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.3-3178C6?logo=typescript&logoColor=white)](#)
+[![ECS Fargate](https://img.shields.io/badge/ECS-Fargate-FF9900?logo=amazonecs&logoColor=white)](#)
+[![Aurora](https://img.shields.io/badge/Aurora-Serverless_v2-527FFF?logo=amazonrds&logoColor=white)](#)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+> Production-grade, globally distributed AWS infrastructure as code. Deploy to 6 regions with one `terraform apply`.
+
+**9 Terraform modules. 30+ AWS services. 6 regions. Zero manual setup.**
+
+> **Note**: The included Node.js application (API + Worker) is a **reference implementation** to demonstrate how the infrastructure works end-to-end. The real value of this project is the Terraform modules. Bring your own application, keep the infra.
+
+---
+
+## The Problem
+
+Building multi-region infrastructure on AWS means weeks of stitching together VPCs, configuring cross-region data replication, layering security policies, wiring up observability, and hoping it all holds together during a regional failure. Most teams either skip global distribution entirely or build something fragile that breaks under real conditions.
+
+## The Solution
+
+A complete, opinionated infrastructure blueprint that deploys everything you need for a globally distributed application. Every module follows AWS Well-Architected best practices and is designed to work together out of the box.
+
+| What you get | How it works |
+|---|---|
+| **Global traffic routing** | Global Accelerator + Route53 anycast to the nearest healthy region |
+| **Auto-scaling containers** | ECS Fargate with CPU/memory/queue-depth scaling, Spot workers |
+| **Multi-region database** | Aurora Global DB on Serverless v2 with per-region RDS Proxy |
+| **Event-driven workers** | SNS fan-out to SQS with Dead Letter Queues and retry policies |
+| **Full observability** | CloudWatch dashboards, 11 alarms, X-Ray tracing, OpenTelemetry |
+| **Security baseline** | WAF + KMS + GuardDuty + Security Hub, zero wildcard IAM |
+| **Cost controls** | Fargate Spot, Serverless v2 auto-scaling, per-service budgets |
+| **Disaster recovery** | Cross-region backups, documented runbooks, fault injection testing |
+
+```bash
+git clone https://github.com/gufranco/aws-global-blueprint.git
+cd aws-global-blueprint
+make setup && make localstack-up  # Full 6-region dev environment
+```
+
+---
+
+## Architecture Pillars
+
+Six design principles guide every decision in this blueprint.
+
+### 1. Region Independence
+
+Each region is a self-contained unit: its own VPC, compute, queues, and database replica. If a region goes down, the others keep serving traffic with zero manual intervention. Global Accelerator detects failures and reroutes within seconds.
+
+### 2. Data Locality
+
+Every region has a local RDS Proxy connected to a local Aurora replica. Read queries never leave the region. Secrets Manager replicates credentials to each region so authentication stays local too. The only cross-region data flow is Aurora's storage-level replication, which runs at sub-second lag.
+
+### 3. Fail-Static
+
+When something breaks, the system degrades gracefully instead of cascading. Circuit breakers prevent slow dependencies from dragging down the API. Dead Letter Queues capture failed messages for replay. Health checks remove unhealthy instances before users notice.
+
+### 4. Cost-Aware Scaling
+
+Aurora Serverless v2 scales from 0.5 ACU to 128 ACU based on actual load, so you only pay for what you use. Worker services run on Fargate Spot for up to 70% savings. Tertiary regions start with minimal capacity and scale up on demand. S3 lifecycle policies automatically archive old data to Glacier.
+
+### 5. Security by Default
+
+Every data store is encrypted at rest with KMS. Every connection uses TLS. IAM policies are scoped to specific resource ARNs, never wildcards. WAF protects against OWASP Top 10. GuardDuty monitors for threats. This is the baseline, not an add-on.
+
+### 6. Observable from Day One
+
+Every region gets a CloudWatch dashboard, 11 preconfigured alarms, X-Ray distributed tracing, and OpenTelemetry instrumentation. You can see what's happening in production before you deploy your first feature.
+
+---
+
+## How It Compares
+
+| Capability | This Blueprint | From Scratch | AWS Landing Zone | CDK Patterns |
+|---|:---:|:---:|:---:|:---:|
+| Multi-region compute | Yes | Build it | VPC only | Partial |
+| Aurora Global + RDS Proxy | Yes | Build it | No | No |
+| Per-region read replicas with local proxy | Yes | Build it | No | No |
+| Event-driven architecture (SNS/SQS/Lambda) | Yes | Build it | No | Yes |
+| WAF + GuardDuty + Security Hub | Yes | Build it | Yes | No |
+| CloudWatch dashboards + alarms | Yes | Build it | Basic | No |
+| X-Ray + OpenTelemetry | Yes | Build it | No | Partial |
+| Chaos engineering (FIS) | Yes | Build it | No | No |
+| Cost management + budgets | Yes | Build it | Basic | No |
+| LocalStack 6-region dev environment | Yes | Build it | No | No |
+| Reference application included | Yes | N/A | No | Yes |
+| Time to deploy | ~30 min | Weeks/months | Hours | Hours |
+
+---
 
 ## Architecture Overview
 
@@ -41,7 +130,10 @@ flowchart TB
     end
 
     subgraph DataLayer["Global Data Layer"]
-        Aurora[(Aurora Global DB)]
+        Aurora[(Aurora Global DB<br/>Serverless v2)]
+        Proxy_US[RDS Proxy - Primary]
+        Proxy_EU[RDS Proxy - EU Replica]
+        Proxy_AP[RDS Proxy - AP Replica]
         DynamoDB[(DynamoDB Global Tables)]
         Redis[(ElastiCache Redis)]
         S3[(S3 Buckets)]
@@ -54,7 +146,9 @@ flowchart TB
     ALB_EU --> ECS_EU
     ALB_AP --> ECS_AP
 
-    ECS_US & ECS_EU & ECS_AP --> Aurora
+    ECS_US --> Proxy_US --> Aurora
+    ECS_EU --> Proxy_EU --> Aurora
+    ECS_AP --> Proxy_AP --> Aurora
     ECS_US & ECS_EU & ECS_AP --> DynamoDB
     ECS_US & ECS_EU & ECS_AP --> Redis
 
@@ -63,7 +157,7 @@ flowchart TB
     SNS_AP --> SQS_AP --> Worker_AP
 ```
 
-## Event-Driven Data Flow
+### Event-Driven Data Flow
 
 ```mermaid
 sequenceDiagram
@@ -71,6 +165,7 @@ sequenceDiagram
     participant GA as Global Accelerator
     participant ALB as Load Balancer
     participant API as API Service
+    participant Proxy as RDS Proxy
     participant DB as Aurora/DynamoDB
     participant SNS as SNS Topic
     participant SQS as SQS Queue
@@ -81,8 +176,10 @@ sequenceDiagram
     GA->>ALB: Route to nearest region
     ALB->>API: Forward request
 
-    API->>DB: Read/Write data
-    DB-->>API: Response
+    API->>Proxy: Read/Write data
+    Proxy->>DB: Connection pooled query
+    DB-->>Proxy: Response
+    Proxy-->>API: Response
 
     API->>SNS: Publish event
     API-->>Client: HTTP Response
@@ -100,9 +197,13 @@ sequenceDiagram
     end
 ```
 
-## Features
+---
 
-### Infrastructure
+## What's Included
+
+### Infrastructure (the core)
+
+Everything below is what you get. This is the project's focus: production-ready IaC modules you can deploy as-is or customize for your stack.
 - **Multi-Region Deployment**: Deploy across 6+ AWS regions globally
 - **Global Accelerator**: Anycast routing for optimal latency worldwide
 - **ECS Fargate**: Serverless container orchestration, no EC2 management
@@ -110,10 +211,13 @@ sequenceDiagram
 - **Blue/Green Deployments**: Zero-downtime deployments with CodeDeploy
 
 ### Data Layer
-- **Aurora Global Database**: Multi-region PostgreSQL with read replicas
+- **Aurora Global Database**: Multi-region PostgreSQL with Serverless v2 auto-scaling (0.5-128 ACUs)
+- **RDS Proxy**: Connection pooling with TLS enforcement, read/write split endpoints per region
+- **Aurora Replica Clusters**: Per-region read replicas with local RDS Proxy, eliminating cross-region read latency
 - **DynamoDB Global Tables**: Multi-master NoSQL with automatic replication
 - **ElastiCache Redis**: Global Datastore for caching and sessions
 - **S3**: Cross-region replication for assets and backups
+- **Secrets Manager**: Multi-region secret replication for local credential access
 
 ### Event-Driven
 - **SNS Topics**: Pub/sub messaging with filter policies
@@ -144,18 +248,22 @@ sequenceDiagram
 
 ### Cost Optimization
 - **Fargate Spot**: Up to 70% savings on worker services
+- **Aurora Serverless v2**: Pay-per-use compute that scales to zero-ish (0.5 ACU minimum)
 - **AWS Budgets**: Proactive cost alerts per service
 - **Cost Allocation Tags**: Detailed cost tracking
 - **S3 Lifecycle Policies**: Automatic data tiering to Glacier
 
+---
+
 ## Project Structure
 
 ```
-aws-multiregion-stack/
+aws-global-blueprint/
 ├── modules/
 │   ├── global/           # Global Accelerator, Route53, ECR
 │   ├── region/           # VPC, ECS, ALB, SQS, SNS, Lambda, CodeDeploy
-│   ├── data/             # Aurora Global, DynamoDB Global, ElastiCache
+│   ├── data/             # Aurora Global, DynamoDB Global, ElastiCache, RDS Proxy
+│   ├── data-replica/     # Aurora replica clusters with local RDS Proxy per secondary region
 │   ├── security/         # WAF, KMS, GuardDuty, Security Hub, VPC Endpoints
 │   ├── observability/    # CloudWatch Dashboards, Alarms, X-Ray
 │   ├── compliance/       # CloudTrail, AWS Config, Data Retention
@@ -164,8 +272,8 @@ aws-multiregion-stack/
 ├── environments/
 │   ├── dev/              # Development environment (single region)
 │   └── prod/             # Production multi-region deployment
-├── app/
-│   ├── shared/           # Shared TypeScript library (@multiregion/shared)
+├── app/                    # Reference application (replace with your own)
+│   ├── shared/           # Shared TypeScript library (@blueprint/shared)
 │   │   └── src/
 │   │       ├── aws/      # AWS SDK clients (DynamoDB, SQS, SNS, S3)
 │   │       ├── config/   # Environment configuration with Zod validation
@@ -202,6 +310,8 @@ aws-multiregion-stack/
 └── README.md
 ```
 
+---
+
 ## Quick Start
 
 ### Prerequisites
@@ -216,10 +326,12 @@ aws-multiregion-stack/
 
 ### Local Development with LocalStack
 
+The entire 6-region setup runs locally using LocalStack. No AWS account needed for development.
+
 ```bash
 # 1. Clone and set up the project
-git clone https://github.com/gufranco/aws-multiregion-stack.git
-cd aws-multiregion-stack
+git clone https://github.com/gufranco/aws-global-blueprint.git
+cd aws-global-blueprint
 make setup
 
 # 2. Start LocalStack (6 AWS regions + PostgreSQL + Redis)
@@ -232,7 +344,6 @@ pnpm build
 
 # 4. Configure environment variables
 cp .env.example .env
-# Edit .env with your LocalStack endpoints
 
 # 5. Start the API
 cd api
@@ -293,9 +404,11 @@ terraform plan -out=tfplan
 terraform apply tfplan
 ```
 
+---
+
 ## Development Commands
 
-The Makefile provides shortcuts for common operations. Run `make help` to see all available targets.
+Run `make help` to see all available targets.
 
 ### Infrastructure
 
@@ -304,8 +417,11 @@ The Makefile provides shortcuts for common operations. Run `make help` to see al
 | `make init` | Initialize Terraform for current environment |
 | `make plan` | Plan Terraform changes |
 | `make apply` | Apply Terraform changes |
+| `make destroy` | Destroy infrastructure for current environment |
+| `make output` | Show Terraform outputs |
 | `make fmt` | Format all Terraform files |
 | `make fmt-check` | Check Terraform formatting |
+| `make init-modules` | Initialize all Terraform modules |
 | `make validate-modules` | Validate all Terraform modules |
 
 ### LocalStack
@@ -317,6 +433,8 @@ The Makefile provides shortcuts for common operations. Run `make help` to see al
 | `make localstack-clean` | Stop LocalStack and remove volumes |
 | `make localstack-status` | Show status of all regions |
 | `make localstack-logs REGION=us-east-1` | Show logs for a specific region |
+| `make localstack-logs-all` | Show logs from all LocalStack containers |
+| `make localstack-init` | Run init scripts for all regions |
 
 ### Application
 
@@ -324,8 +442,31 @@ The Makefile provides shortcuts for common operations. Run `make help` to see al
 |---------|-------------|
 | `make up` | Start everything: LocalStack + App |
 | `make down` | Stop everything |
+| `make restart` | Restart everything |
 | `make app-build` | Build Docker images for API and Worker |
+| `make app-up` | Start application services only |
+| `make app-down` | Stop application services |
+| `make app-logs` | Show application logs |
 | `make app-test` | Run application tests |
+
+### Testing
+
+| Command | Description |
+|---------|-------------|
+| `make test` | Run all tests |
+| `make test-unit` | Run unit tests |
+| `make test-integration` | Run integration tests (requires LocalStack) |
+| `make test-e2e` | Run E2E tests |
+| `make test-load` | Run load tests with k6 |
+
+### CI/CD
+
+| Command | Description |
+|---------|-------------|
+| `make ci-lint` | Run linters (Terraform + app) |
+| `make ci-test` | Run tests for CI |
+| `make ci-build` | Build for CI |
+| `make ci-security` | Run security scans (tfsec + pnpm audit) |
 
 ### AWS CLI Shortcuts
 
@@ -338,6 +479,7 @@ These commands target LocalStack and accept `REGION=<region>`:
 | `make list-dynamodb` | List DynamoDB tables |
 | `make list-s3` | List S3 buckets |
 | `make list-secrets` | List Secrets Manager secrets |
+| `make list-logs` | List CloudWatch log groups |
 | `make list-all-regions` | List SQS queues across all 6 regions |
 
 ### Database
@@ -345,8 +487,20 @@ These commands target LocalStack and accept `REGION=<region>`:
 | Command | Description |
 |---------|-------------|
 | `make db-connect` | Connect to PostgreSQL |
-| `make redis-cli` | Connect to Redis CLI |
+| `make db-migrate` | Run database migrations |
+| `make db-seed` | Seed database with sample data |
 | `make db-reset` | Drop and recreate the database |
+| `make redis-cli` | Connect to Redis CLI |
+
+### Utilities
+
+| Command | Description |
+|---------|-------------|
+| `make setup` | Initial project setup |
+| `make clean` | Clean temporary files (.terraform, state, zips) |
+| `make clean-all` | Clean everything including Docker volumes |
+
+---
 
 ## Region Configuration
 
@@ -366,8 +520,12 @@ These commands target LocalStack and accept `REGION=<region>`:
 ```hcl
 # environments/prod/terraform.tfvars
 
-project_name = "aws-multiregion-stack"
+project_name = "blueprint"
 environment  = "prod"
+
+# Aurora Serverless v2 capacity (ACUs)
+aurora_serverless_min_capacity = 2    # Minimum ACUs (0.5-128)
+aurora_serverless_max_capacity = 64   # Maximum ACUs (1-128)
 
 regions = {
   us_east_1 = {
@@ -403,6 +561,10 @@ regions = {
 }
 ```
 
+Each secondary region gets an Aurora replica cluster with a local RDS Proxy, deployed via the `data-replica` module. This eliminates cross-region latency for read queries. The primary region's RDS Proxy provides both read-write and read-only endpoints.
+
+---
+
 ## API Reference
 
 ### Endpoints
@@ -436,6 +598,8 @@ pending -> confirmed -> processing -> shipped -> delivered
 cancelled  cancelled    cancelled
 ```
 
+---
+
 ## Environment Variables
 
 All variables are documented in `app/.env.example`. Copy it to `.env` and fill in the values.
@@ -446,7 +610,7 @@ All variables are documented in `app/.env.example`. Copy it to `.env` and fill i
 |----------|-------------|---------|
 | `NODE_ENV` | Environment: development, staging, production | `development` |
 | `PORT` | API server port | `3000` |
-| `PROJECT_NAME` | Project identifier used in resource names | `multiregion` |
+| `PROJECT_NAME` | Project identifier used in resource names | `blueprint` |
 | `CORS_ALLOWED_ORIGINS` | Comma-separated allowed origins for CORS | all origins in dev |
 
 ### AWS/Region
@@ -469,9 +633,17 @@ All variables are documented in `app/.env.example`. Copy it to `.env` and fill i
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `DATABASE_URL` | PostgreSQL connection string | - |
-| `REDIS_URL` | Redis connection string | - |
-| `DYNAMODB_ORDERS_TABLE` | DynamoDB orders table name | `multiregion-dev-orders` |
+| `DATABASE_URL` | Full PostgreSQL connection string (overrides individual vars) | - |
+| `DATABASE_HOST` | RDS Proxy endpoint (primary read-write) | - |
+| `DATABASE_READ_HOST` | RDS Proxy read-only endpoint | - |
+| `DATABASE_PORT` | PostgreSQL port | `5432` |
+| `DATABASE_USER` | Database username | - |
+| `DATABASE_PASSWORD` | Database password | - |
+| `DATABASE_NAME` | Database name | - |
+| `REDIS_HOST` | Redis host | `localhost` |
+| `REDIS_PORT` | Redis port | `6379` |
+| `REDIS_PASSWORD` | Redis password | - |
+| `DYNAMODB_ORDERS_TABLE` | DynamoDB orders table name | `blueprint-dev-orders` |
 
 ### Messaging
 
@@ -479,30 +651,18 @@ All variables are documented in `app/.env.example`. Copy it to `.env` and fill i
 |----------|-------------|---------|
 | `SQS_ORDER_QUEUE_URL` | Order processing queue URL | - |
 | `SQS_NOTIFICATION_QUEUE_URL` | Notification queue URL | - |
+| `SQS_DLQ_URL` | Dead letter queue URL | - |
 | `SNS_ORDER_TOPIC_ARN` | Order events topic ARN | - |
 | `SNS_NOTIFICATION_TOPIC_ARN` | Notification topic ARN | - |
 
-## Testing
+### Observability
 
-```bash
-# Unit tests
-make test
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `OTEL_SERVICE_NAME` | OpenTelemetry service name | `blueprint-app` |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP exporter endpoint | - |
 
-# Integration tests (requires LocalStack)
-make localstack-up
-make test-integration
-
-# Load tests with K6
-make test-load
-
-# Terraform module validation
-make validate-modules
-
-# Terraform tests with Terratest
-cd tests/terraform
-go mod download
-go test -v -timeout 30m
-```
+---
 
 ## Monitoring
 
@@ -525,10 +685,17 @@ Each region has a dedicated dashboard displaying:
 | P99 Latency High | Latency > 1000ms | Warning |
 | DLQ Messages | Messages >= 1 | Critical |
 | Queue Depth High | Messages > 1000 | Warning |
+| Aurora ACU Utilization | ServerlessDatabaseCapacity > threshold for 5 min | Warning |
+| Aurora Capacity Near Max | ACU within 10% of max for 5 min | Critical |
+| RDS Proxy Pinned Connections | DatabaseConnectionsCurrentlySessionPinned > 10 | Warning |
+| RDS Proxy Pool Saturation | DatabaseConnectionsBorrowLatency > 80 | Warning |
+| Aurora Replication Lag | AuroraGlobalDBReplicationLag > 5000ms | Critical |
 
 ### X-Ray Tracing
 
 Distributed tracing is enabled by default. View traces in the AWS X-Ray console to analyze request flow across services and regions.
+
+---
 
 ## Security
 
@@ -565,24 +732,53 @@ All IAM policies follow least-privilege principles:
 - **GuardDuty**: Threat detection for accounts, workloads, and data
 - **Security Hub**: Aggregated security findings
 
-## Cost Optimization
+---
 
-### Strategies
+## Testing
 
-- **Fargate Spot**: Workers use Spot capacity for up to 70% savings
-- **Auto Scaling**: Scale down during low traffic periods
-- **S3 Lifecycle**: Automatic transition to Glacier after configurable days
-- **Reserved Capacity**: Commit to Aurora and ElastiCache for savings
-- **Tiered Regions**: Tertiary regions run fewer tasks by default
+```bash
+# Unit tests
+make test
 
-### Budget Alerts
+# Integration tests (requires LocalStack)
+make localstack-up
+make test-integration
 
-| Alert | Threshold |
-|-------|-----------|
-| Forecasted | 50%, 80% of budget |
-| Actual | 100%, 120% of budget |
+# Load tests with K6
+make test-load
 
-Alerts are sent via SNS to configured email addresses. Separate budgets track ECS and RDS spending.
+# Terraform module validation
+make validate-modules
+
+# Terraform tests with Terratest
+cd tests/terraform
+go mod download
+go test -v -timeout 30m
+```
+
+---
+
+## FAQ
+
+**Can I use fewer regions?**
+Yes. Set `enabled = false` on any region in your `terraform.tfvars`. The dev environment uses a single region by default. You can run production with just 2 regions if that fits your needs.
+
+**Does this work with existing VPCs?**
+The blueprint creates its own VPCs with non-overlapping CIDR blocks. If you need to integrate with existing VPCs, you can modify the `region` module to accept VPC IDs instead of creating new ones, but that requires some refactoring.
+
+**How much does this cost?**
+It depends heavily on traffic and region count. A minimal 2-region setup with Aurora Serverless v2 at 0.5 ACU, Fargate Spot workers, and low traffic runs under $500/month. A full 6-region production deployment with higher capacity can range from $2,000-$10,000+/month. The FinOps module includes budget alerts so there are no surprises.
+
+**Is this production-ready?**
+The Terraform modules follow AWS Well-Architected best practices: encryption everywhere, least-privilege IAM, multi-AZ deployments, automated backups, and health-checked scaling. They are designed for production use. The included Node.js application is a reference implementation to show how services interact with the infrastructure. You should replace it with your own application, the infra layer is the product here.
+
+**Can I use this with Kubernetes instead of ECS?**
+The compute layer is modular. You could replace the `region` module's ECS resources with EKS, but the rest of the stack (data layer, security, observability, networking) stays the same. ECS Fargate was chosen because it eliminates cluster management overhead.
+
+**What happens during a regional failure?**
+Global Accelerator detects the failure via health checks and stops routing traffic to the affected region within seconds. Aurora automatically promotes a replica to primary if the primary region fails. DynamoDB Global Tables continue serving from any remaining region. The disaster recovery runbook documents the full procedure.
+
+---
 
 ## Architecture Decisions
 
@@ -597,6 +793,8 @@ Key architectural decisions are documented as ADRs in [docs/adr/](docs/adr/):
 Recovery runbooks are available in [docs/runbooks/](docs/runbooks/):
 
 - [Disaster Recovery Procedures](docs/runbooks/disaster-recovery.md)
+
+---
 
 ## License
 
