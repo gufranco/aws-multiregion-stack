@@ -349,6 +349,34 @@ variable "api_container_port" {
 }
 
 # -----------------------------------------------------------------------------
+# Bastion Host
+# -----------------------------------------------------------------------------
+
+variable "enable_bastion" {
+  description = "Enable a bastion host for SSH access to private resources"
+  type        = bool
+  default     = false
+}
+
+variable "bastion_instance_type" {
+  description = "EC2 instance type for bastion host"
+  type        = string
+  default     = "t4g.nano"
+}
+
+variable "bastion_key_name" {
+  description = "EC2 key pair name for bastion SSH access"
+  type        = string
+  default     = ""
+}
+
+variable "bastion_allowed_cidr" {
+  description = "CIDR block allowed to SSH into the bastion (e.g., your IP: 203.0.113.10/32)"
+  type        = string
+  default     = "0.0.0.0/0"
+}
+
+# -----------------------------------------------------------------------------
 # Tags
 # -----------------------------------------------------------------------------
 

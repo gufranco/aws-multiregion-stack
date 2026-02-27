@@ -718,6 +718,38 @@ Distributed tracing is enabled by default. View traces in the AWS X-Ray console 
 | ElastiCache | In-transit and at-rest encryption |
 | Secrets | KMS-encrypted Secrets Manager |
 
+### Bastion Host
+
+A minimal `t4g.nano` EC2 instance in a public subnet for SSH access to private resources like Aurora, ElastiCache, and RDS Proxy. Disabled by default.
+
+**Setting up SSH access:**
+
+```bash
+# 1. Generate an SSH key (if you don't have one)
+ssh-keygen -t ed25519 -C "your-email@example.com"
+
+# 2. Import your public key as an EC2 key pair
+aws ec2 import-key-pair \
+  --key-name bastion \
+  --public-key-material fileb://~/.ssh/id_ed25519.pub \
+  --region us-east-1
+
+# 3. Enable the bastion in terraform.tfvars
+# enable_bastion       = true
+# bastion_key_name     = "bastion"
+# bastion_allowed_cidr = "YOUR_IP/32"   # Lock to your IP
+
+# 4. Apply and connect
+terraform apply
+ssh ec2-user@$(terraform output -raw bastion_public_ip)
+
+# 5. From the bastion, access private resources
+psql -h <rds-proxy-endpoint> -U postgres -d app
+redis-cli -h <redis-endpoint>
+```
+
+To add another team member's key, import their public key as a separate EC2 key pair or add it to the bastion's `~/.ssh/authorized_keys` via user data or SSM Session Manager.
+
 ### IAM Security
 
 All IAM policies follow least-privilege principles:

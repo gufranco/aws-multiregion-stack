@@ -234,6 +234,25 @@ output "cloudwatch_log_group_worker" {
 }
 
 # -----------------------------------------------------------------------------
+# Bastion Host
+# -----------------------------------------------------------------------------
+
+output "bastion_public_ip" {
+  description = "Bastion host public IP address"
+  value       = var.enable_bastion ? aws_instance.bastion[0].public_ip : ""
+}
+
+output "bastion_public_dns" {
+  description = "Bastion host public DNS name"
+  value       = var.enable_bastion ? aws_instance.bastion[0].public_dns : ""
+}
+
+output "bastion_security_group_id" {
+  description = "Bastion security group ID"
+  value       = var.enable_bastion ? aws_security_group.bastion[0].id : ""
+}
+
+# -----------------------------------------------------------------------------
 # Region Info
 # -----------------------------------------------------------------------------
 
