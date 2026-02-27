@@ -13,6 +13,7 @@ import { config, isAppError } from '@blueprint/shared';
 import { healthRoutes } from './routes/health.js';
 import { orderRoutes } from './routes/orders.js';
 import { regionMiddleware } from './middleware/region.js';
+import { authMiddleware } from './middleware/auth.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -59,6 +60,13 @@ export async function buildApp(): Promise<FastifyInstance> {
     allowList: (request) => {
       return request.url.startsWith('/health');
     },
+    errorResponseBuilder: (_request, context) => ({
+      error: {
+        code: 'RATE_LIMIT_EXCEEDED',
+        message: `Too many requests. Retry after ${Math.ceil(context.ttl / 1000)}s`,
+        retryAfter: Math.ceil(context.ttl / 1000),
+      },
+    }),
   });
 
   // OpenAPI documentation
@@ -101,12 +109,15 @@ export async function buildApp(): Promise<FastifyInstance> {
   // Add region info to all requests
   app.addHook('preHandler', regionMiddleware);
 
+  // Authenticate API requests (skips health/docs endpoints)
+  app.addHook('preHandler', authMiddleware);
+
   // ==========================================================================
   // Routes
   // ==========================================================================
 
   await app.register(healthRoutes, { prefix: '' });
-  await app.register(orderRoutes, { prefix: '/api/orders' });
+  await app.register(orderRoutes, { prefix: '/v1/orders' });
 
   // ==========================================================================
   // Error Handler
@@ -116,7 +127,10 @@ export async function buildApp(): Promise<FastifyInstance> {
     request.log.error({ error }, 'Request error');
 
     if (isAppError(error)) {
-      return reply.status(error.statusCode).send(error.toJSON());
+      const { error: errBody } = error.toJSON();
+      return reply.status(error.statusCode).send({
+        error: { ...errBody, requestId: request.id },
+      });
     }
 
     // Fastify validation errors
@@ -125,6 +139,7 @@ export async function buildApp(): Promise<FastifyInstance> {
         error: {
           code: 'VALIDATION_ERROR',
           message: 'Invalid request',
+          requestId: request.id,
           details: error.validation,
         },
       });
@@ -135,6 +150,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       error: {
         code: 'INTERNAL_ERROR',
         message: config.NODE_ENV === 'production' ? 'Internal server error' : error.message,
+        requestId: request.id,
       },
     });
   });
@@ -148,6 +164,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       error: {
         code: 'NOT_FOUND',
         message: `Route ${request.method} ${request.url} not found`,
+        requestId: request.id,
       },
     });
   });

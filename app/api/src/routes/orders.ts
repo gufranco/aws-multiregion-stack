@@ -5,10 +5,9 @@
 import type { FastifyInstance } from 'fastify';
 import {
   createOrderSchema,
-  paginationSchema,
+  cursorPaginationSchema,
   type CreateOrderInput,
   type Order,
-  type PaginatedResult,
 } from '@blueprint/shared';
 import { orderService } from '../services/orders.js';
 
@@ -78,8 +77,12 @@ export async function orderRoutes(app: FastifyInstance): Promise<void> {
       // Validate input
       const input = createOrderSchema.parse(request.body);
 
-      // Create order
-      const order = await orderService.createOrder(input);
+      // Create order with idempotency key and correlation ID for tracing
+      const idempotencyKey = request.headers['idempotency-key'] as string | undefined;
+      const order = await orderService.createOrder(input, {
+        idempotencyKey,
+        correlationId: request.id,
+      });
 
       return reply.status(201).send(order);
     }
@@ -136,18 +139,18 @@ export async function orderRoutes(app: FastifyInstance): Promise<void> {
     }
   );
 
-  // List orders (with pagination)
-  app.get<{ Querystring: { page?: number; limit?: number; customerId?: string; status?: string } }>(
+  // List orders (cursor-based pagination)
+  app.get<{ Querystring: { cursor?: string; limit?: number; customerId?: string; status?: string } }>(
     '/',
     {
       schema: {
         tags: ['Orders'],
         summary: 'List orders',
-        description: 'Returns paginated list of orders with optional filters',
+        description: 'Returns cursor-paginated list of orders with optional filters',
         querystring: {
           type: 'object',
           properties: {
-            page: { type: 'integer', minimum: 1, default: 1 },
+            cursor: { type: 'string', description: 'Opaque cursor from previous response' },
             limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
             customerId: { type: 'string', format: 'uuid' },
             status: { type: 'string' },
@@ -161,12 +164,9 @@ export async function orderRoutes(app: FastifyInstance): Promise<void> {
               pagination: {
                 type: 'object',
                 properties: {
-                  page: { type: 'integer' },
+                  nextCursor: { type: 'string', nullable: true },
+                  hasMore: { type: 'boolean' },
                   limit: { type: 'integer' },
-                  total: { type: 'integer' },
-                  totalPages: { type: 'integer' },
-                  hasNext: { type: 'boolean' },
-                  hasPrev: { type: 'boolean' },
                 },
               },
             },
@@ -175,7 +175,7 @@ export async function orderRoutes(app: FastifyInstance): Promise<void> {
       },
     },
     async (request, reply) => {
-      const pagination = paginationSchema.parse(request.query);
+      const pagination = cursorPaginationSchema.parse(request.query);
       const filters = {
         customerId: request.query.customerId,
         status: request.query.status,
