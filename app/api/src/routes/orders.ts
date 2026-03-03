@@ -84,7 +84,10 @@ export async function orderRoutes(app: FastifyInstance): Promise<void> {
         correlationId: request.id,
       });
 
-      return reply.status(201).send(order);
+      return reply
+        .status(201)
+        .header('location', `/v1/orders/${order.id}`)
+        .send(order);
     },
   );
 

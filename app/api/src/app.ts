@@ -8,7 +8,7 @@ import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
-import { config, isAppError } from '@blueprint/shared';
+import { config, isAppError, metricsOnRequest, metricsOnResponse } from '@blueprint/shared';
 
 import { healthRoutes } from './routes/health.js';
 import { orderRoutes } from './routes/orders.js';
@@ -106,11 +106,23 @@ export async function buildApp(): Promise<FastifyInstance> {
   // Middleware
   // ==========================================================================
 
+  // Record request start time for latency metrics
+  app.addHook('onRequest', metricsOnRequest);
+
   // Add region info to all requests
   app.addHook('preHandler', regionMiddleware);
 
   // Authenticate API requests (skips health/docs endpoints)
   app.addHook('preHandler', authMiddleware);
+
+  // Publish latency and error metrics after the response is sent
+  app.addHook('onResponse', metricsOnResponse);
+
+  // Include requestId in every response for traceability
+  app.addHook('onSend', (_request, reply, payload, done) => {
+    reply.header('x-request-id', _request.id);
+    done(null, payload);
+  });
 
   // ==========================================================================
   // Routes
