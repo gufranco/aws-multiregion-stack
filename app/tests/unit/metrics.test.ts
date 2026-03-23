@@ -32,23 +32,20 @@ vi.mock('../../shared/src/logger.js', () => ({
 import { metricsOnRequest, metricsOnResponse } from '../../shared/src/metrics/index.js';
 
 describe('metricsOnRequest', () => {
-  it('should set startTime on the request object', () => {
+  it('should set startTime on the request object', async () => {
     // Arrange
     const request = { method: 'GET', url: '/v1/orders' } as {
       method: string;
       url: string;
       startTime?: number;
     };
-    const reply = {};
 
     // Act
-    const done = vi.fn();
-    metricsOnRequest(request, reply, done);
+    await metricsOnRequest(request);
 
     // Assert
     expect(request.startTime).toBeTypeOf('number');
     expect(request.startTime).toBeGreaterThan(0);
-    expect(done).toHaveBeenCalledOnce();
   });
 });
 

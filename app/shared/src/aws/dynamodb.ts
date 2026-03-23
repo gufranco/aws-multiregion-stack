@@ -109,28 +109,22 @@ export async function updateItem<T>(
     returnValues?: 'NONE' | 'ALL_OLD' | 'UPDATED_OLD' | 'ALL_NEW' | 'UPDATED_NEW';
   },
 ): Promise<T | null> {
-  // Build update expression
-  const updateExpressionParts: string[] = [];
-  const expressionAttributeNames: Record<string, string> = {};
-  const expressionAttributeValues: Record<string, unknown> = {};
+  // Build update expression from the updates map
+  const entries = Object.entries(updates);
+  const updateExpressionParts = entries.map((_, i) => `#f${i} = :v${i}`);
 
-  let index = 0;
-  for (const [field, value] of Object.entries(updates)) {
-    const nameKey = `#f${index}`;
-    const valueKey = `:v${index}`;
-    updateExpressionParts.push(`${nameKey} = ${valueKey}`);
-    expressionAttributeNames[nameKey] = field;
-    expressionAttributeValues[valueKey] = value;
-    index++;
-  }
+  const baseNames = Object.fromEntries(entries.map(([field], i) => [`#f${i}`, field]));
+  const baseValues = Object.fromEntries(entries.map(([, value], i) => [`:v${i}`, value]));
 
   // Merge condition expression attributes if provided
-  if (options?.conditionAttributeNames) {
-    Object.assign(expressionAttributeNames, options.conditionAttributeNames);
-  }
-  if (options?.conditionAttributeValues) {
-    Object.assign(expressionAttributeValues, options.conditionAttributeValues);
-  }
+  const expressionAttributeNames: Record<string, string> = {
+    ...baseNames,
+    ...options?.conditionAttributeNames,
+  };
+  const expressionAttributeValues: Record<string, unknown> = {
+    ...baseValues,
+    ...options?.conditionAttributeValues,
+  };
 
   const input: UpdateCommandInput = {
     TableName: tableName,

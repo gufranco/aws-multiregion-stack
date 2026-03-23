@@ -56,10 +56,10 @@ class Semaphore {
 }
 
 interface QueueConfig {
-  name: string;
-  url: string | undefined;
-  handler: (message: Message) => Promise<void>;
-  enabled: boolean;
+  readonly name: string;
+  readonly url: string | undefined;
+  readonly handler: (message: Message) => Promise<void>;
+  readonly enabled: boolean;
 }
 
 export class WorkerManager {

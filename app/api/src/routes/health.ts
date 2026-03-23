@@ -59,7 +59,7 @@ export async function healthRoutes(app: FastifyInstance): Promise<void> {
         summary: 'Detailed health check',
         description: 'Returns health status of all dependencies',
         response: {
-          200: {
+          '2xx': {
             type: 'object',
             properties: {
               status: { type: 'string', enum: ['healthy', 'degraded', 'unhealthy'] },
@@ -79,6 +79,20 @@ export async function healthRoutes(app: FastifyInstance): Promise<void> {
                   sns: { type: 'string', enum: ['ok', 'error'] },
                 },
               },
+            },
+          },
+          503: {
+            type: 'object',
+            properties: {
+              status: { type: 'string' },
+              region: { type: 'string' },
+              regionKey: { type: 'string' },
+              isPrimary: { type: 'boolean' },
+              tier: { type: 'string' },
+              timestamp: { type: 'string', format: 'date-time' },
+              version: { type: 'string' },
+              uptime: { type: 'number' },
+              checks: { type: 'object' },
             },
           },
         },
@@ -164,6 +178,13 @@ export async function healthRoutes(app: FastifyInstance): Promise<void> {
             type: 'object',
             properties: {
               status: { type: 'string' },
+            },
+          },
+          503: {
+            type: 'object',
+            properties: {
+              status: { type: 'string' },
+              reason: { type: 'string' },
             },
           },
         },

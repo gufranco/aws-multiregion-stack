@@ -3,7 +3,7 @@
 [![Terraform](https://img.shields.io/badge/Terraform-%3E%3D1.5-844FBA?logo=terraform&logoColor=white)](#prerequisites)
 [![OpenTofu](https://img.shields.io/badge/OpenTofu-%3E%3D1.6-FFDA18?logo=opentofu&logoColor=black)](#prerequisites)
 [![AWS](https://img.shields.io/badge/AWS-6%2B_Regions-FF9900?logo=amazonwebservices&logoColor=white)](#supported-aws-regions)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.3-3178C6?logo=typescript&logoColor=white)](#)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)](#)
 [![ECS Fargate](https://img.shields.io/badge/ECS-Fargate-FF9900?logo=amazonecs&logoColor=white)](#)
 [![Aurora](https://img.shields.io/badge/Aurora-Serverless_v2-527FFF?logo=amazonrds&logoColor=white)](#)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -320,7 +320,7 @@ aws-global-blueprint/
 | Tool | Version | Purpose |
 |------|---------|---------|
 | Terraform or OpenTofu | >= 1.5 / >= 1.6 | Infrastructure as Code |
-| Node.js | 20 | Application runtime |
+| Node.js | 24 | Application runtime |
 | pnpm | >= 8 | Package manager |
 | Docker | Latest | LocalStack and containers |
 | AWS CLI | v2 | AWS interactions |

@@ -6,7 +6,7 @@
 # =============================================================================
 
 # Stage 1: Build
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS builder
 
 # Install pnpm
 RUN corepack enable && corepack prepare pnpm@8.15.0 --activate
@@ -30,7 +30,10 @@ RUN cd shared && pnpm build
 RUN cd api && pnpm build
 
 # Stage 2: Production
-FROM node:20-alpine AS production
+FROM node:24-alpine AS production
+
+# Install tini for proper PID 1 signal handling
+RUN apk add --no-cache tini
 
 # Install pnpm
 RUN corepack enable && corepack prepare pnpm@8.15.0 --activate
@@ -72,6 +75,9 @@ EXPOSE 3000
 # Health check
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
+
+# Use tini as PID 1 for proper signal forwarding
+ENTRYPOINT ["/sbin/tini", "--"]
 
 # Start the application
 WORKDIR /app/api

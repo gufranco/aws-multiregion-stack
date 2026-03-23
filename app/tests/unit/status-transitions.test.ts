@@ -71,7 +71,7 @@ describe('Order Status State Machine', () => {
       const transitionKeys = Object.keys(ORDER_STATUS_TRANSITIONS);
 
       // Assert
-      expect(transitionKeys.sort()).toEqual(enumValues.sort());
+      expect(transitionKeys.toSorted()).toEqual(enumValues.toSorted());
     });
   });
 });

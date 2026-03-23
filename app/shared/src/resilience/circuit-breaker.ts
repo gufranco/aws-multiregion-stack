@@ -8,11 +8,11 @@ import { createLogger } from '../logger.js';
 const logger = createLogger('circuit-breaker');
 
 export interface CircuitBreakerOptions {
-  timeout?: number;
-  errorThresholdPercentage?: number;
-  resetTimeout?: number;
-  volumeThreshold?: number;
-  name?: string;
+  readonly timeout?: number;
+  readonly errorThresholdPercentage?: number;
+  readonly resetTimeout?: number;
+  readonly volumeThreshold?: number;
+  readonly name?: string;
 }
 
 const defaultOptions: CircuitBreakerOptions = {
@@ -22,7 +22,6 @@ const defaultOptions: CircuitBreakerOptions = {
   volumeThreshold: 5, // Minimum requests before calculating error percentage
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createCircuitBreaker(
   fn: (...args: unknown[]) => Promise<unknown>,
   options: CircuitBreakerOptions = {},

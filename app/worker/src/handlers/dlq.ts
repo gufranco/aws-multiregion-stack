@@ -40,13 +40,17 @@ export async function processDlqMessage(message: Message): Promise<void> {
   let orderId: string | undefined;
 
   try {
-    const body = JSON.parse(message.Body ?? '{}');
-    const eventData = body.Message ? JSON.parse(body.Message) : body;
+    const body: unknown = JSON.parse(message.Body ?? '{}');
+    const snsWrapper = body as { Message?: string } | undefined;
+    const eventData = snsWrapper?.Message
+      ? (JSON.parse(snsWrapper.Message) as Record<string, unknown>)
+      : (body as Record<string, unknown>);
 
-    eventType = eventData.type;
-    eventId = eventData.id;
-    correlationId = eventData.correlationId;
-    orderId = eventData.data?.orderId;
+    eventType = eventData['type'] as string | undefined;
+    eventId = eventData['id'] as string | undefined;
+    correlationId = eventData['correlationId'] as string | undefined;
+    const data = eventData['data'] as Record<string, unknown> | undefined;
+    orderId = data?.['orderId'] as string | undefined;
 
     logger.error({ eventType, eventId, correlationId, orderId }, 'DLQ message event details');
   } catch {

@@ -36,10 +36,10 @@ export function isValidStatusTransition(from: OrderStatus, to: OrderStatus): boo
 
 export const orderItemSchema = z.object({
   productId: z.string().uuid(),
-  productName: z.string().min(1),
-  quantity: z.number().int().positive(),
-  unitPrice: z.number().positive(),
-  totalPrice: z.number().positive(),
+  productName: z.string().min(1).max(500),
+  quantity: z.number().int().positive().max(99999),
+  unitPrice: z.number().positive().max(999999.99),
+  totalPrice: z.number().positive().max(999999.99),
 });
 
 export type OrderItem = z.infer<typeof orderItemSchema>;
@@ -48,14 +48,14 @@ export const createOrderSchema = z.object({
   customerId: z.string().uuid(),
   items: z.array(orderItemSchema).min(1),
   shippingAddress: z.object({
-    street: z.string().min(1),
-    city: z.string().min(1),
-    state: z.string().min(1),
+    street: z.string().min(1).max(500),
+    city: z.string().min(1).max(200),
+    state: z.string().min(1).max(100),
     country: z.string().min(2).max(2),
-    postalCode: z.string().min(1),
+    postalCode: z.string().min(1).max(20),
   }),
   metadata: z
-    .record(z.unknown())
+    .record(z.string(), z.unknown())
     .refine((obj) => Object.keys(obj).length <= 50, 'metadata cannot have more than 50 keys')
     .optional(),
 });
@@ -102,7 +102,7 @@ export const baseEventSchema = z.object({
   source: z.string(),
   region: z.string(),
   correlationId: z.string().uuid().optional(),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const orderEventSchema = baseEventSchema.extend({
@@ -134,7 +134,7 @@ export const notificationEventSchema = baseEventSchema.extend({
     subject: z.string().optional(),
     body: z.string(),
     templateId: z.string().optional(),
-    templateData: z.record(z.unknown()).optional(),
+    templateData: z.record(z.string(), z.unknown()).optional(),
   }),
 });
 
@@ -145,12 +145,12 @@ export type NotificationEvent = z.infer<typeof notificationEventSchema>;
 // =============================================================================
 
 export interface SQSMessageBody<T> {
-  Message: string; // JSON stringified event
-  MessageId: string;
-  Type: 'Notification';
-  TopicArn?: string;
-  Timestamp: string;
-  data?: T; // Parsed event data
+  readonly Message: string; // JSON stringified event
+  readonly MessageId: string;
+  readonly Type: 'Notification';
+  readonly TopicArn?: string;
+  readonly Timestamp: string;
+  readonly data?: T; // Parsed event data
 }
 
 // =============================================================================
@@ -158,19 +158,19 @@ export interface SQSMessageBody<T> {
 // =============================================================================
 
 export interface HealthStatus {
-  status: 'healthy' | 'degraded' | 'unhealthy';
-  region: string;
-  regionKey: string;
-  isPrimary: boolean;
-  tier: string;
-  timestamp: string;
-  version: string;
-  uptime: number;
-  checks: {
-    database: 'ok' | 'error';
-    redis: 'ok' | 'error';
-    sqs: 'ok' | 'error';
-    sns: 'ok' | 'error';
+  readonly status: 'healthy' | 'degraded' | 'unhealthy';
+  readonly region: string;
+  readonly regionKey: string;
+  readonly isPrimary: boolean;
+  readonly tier: string;
+  readonly timestamp: string;
+  readonly version: string;
+  readonly uptime: number;
+  readonly checks: {
+    readonly database: 'ok' | 'error';
+    readonly redis: 'ok' | 'error';
+    readonly sqs: 'ok' | 'error';
+    readonly sns: 'ok' | 'error';
   };
 }
 
@@ -188,30 +188,30 @@ export const paginationSchema = z.object({
 export type PaginationInput = z.infer<typeof paginationSchema>;
 
 export interface PaginatedResult<T> {
-  data: T[];
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-    hasNext: boolean;
-    hasPrev: boolean;
+  readonly data: readonly T[];
+  readonly pagination: {
+    readonly page: number;
+    readonly limit: number;
+    readonly total: number;
+    readonly totalPages: number;
+    readonly hasNext: boolean;
+    readonly hasPrev: boolean;
   };
 }
 
 // Cursor-based pagination (preferred for DynamoDB)
 export const cursorPaginationSchema = z.object({
-  cursor: z.string().optional(),
+  cursor: z.string().max(2048).optional(),
   limit: z.coerce.number().int().positive().max(100).default(20),
 });
 
 export type CursorPaginationInput = z.infer<typeof cursorPaginationSchema>;
 
 export interface CursorPaginatedResult<T> {
-  data: T[];
-  pagination: {
-    nextCursor: string | null;
-    hasMore: boolean;
-    limit: number;
+  readonly data: readonly T[];
+  readonly pagination: {
+    readonly nextCursor: string | null;
+    readonly hasMore: boolean;
+    readonly limit: number;
   };
 }

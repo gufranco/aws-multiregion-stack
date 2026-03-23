@@ -119,9 +119,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   app.addHook('onResponse', metricsOnResponse);
 
   // Include requestId in every response for traceability
-  app.addHook('onSend', (_request, reply, payload, done) => {
-    void reply.header('x-request-id', _request.id);
-    done(null, payload);
+  app.addHook('onSend', async (request, reply, payload) => {
+    void reply.header('x-request-id', request.id);
+    return payload;
   });
 
   // ==========================================================================
@@ -135,7 +135,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   // Error Handler
   // ==========================================================================
 
-  app.setErrorHandler((error, request, reply) => {
+  app.setErrorHandler((error: unknown, request, reply) => {
     request.log.error({ error }, 'Request error');
 
     if (isAppError(error)) {
@@ -146,22 +146,24 @@ export async function buildApp(): Promise<FastifyInstance> {
     }
 
     // Fastify validation errors
-    if (error.validation) {
+    const fastifyError = error as { validation?: unknown[]; message?: string };
+    if (fastifyError.validation) {
       return reply.status(400).send({
         error: {
           code: 'VALIDATION_ERROR',
           message: 'Invalid request',
           requestId: request.id,
-          details: error.validation,
+          details: fastifyError.validation,
         },
       });
     }
 
     // Generic error
+    const message = error instanceof Error ? error.message : 'Internal server error';
     return reply.status(500).send({
       error: {
         code: 'INTERNAL_ERROR',
-        message: config.NODE_ENV === 'production' ? 'Internal server error' : error.message,
+        message: config.NODE_ENV === 'production' ? 'Internal server error' : message,
         requestId: request.id,
       },
     });

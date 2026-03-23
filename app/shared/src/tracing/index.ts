@@ -7,8 +7,12 @@ import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
 import { AWSXRayPropagator } from '@opentelemetry/propagator-aws-xray';
 import { AWSXRayIdGenerator } from '@opentelemetry/id-generator-aws-xray';
-import { Resource } from '@opentelemetry/resources';
-import { SemanticResourceAttributes } from '@opentelemetry/semantic-conventions';
+import { resourceFromAttributes } from '@opentelemetry/resources';
+import {
+  ATTR_SERVICE_NAME,
+  ATTR_SERVICE_VERSION,
+  SEMRESATTRS_DEPLOYMENT_ENVIRONMENT,
+} from '@opentelemetry/semantic-conventions';
 import { config } from '../config/index.js';
 
 let sdk: NodeSDK | null = null;
@@ -19,13 +23,13 @@ export function initTracing(): void {
   }
 
   // Resource attributes
-  const resource = new Resource({
-    [SemanticResourceAttributes.SERVICE_NAME]: config.OTEL_SERVICE_NAME,
-    [SemanticResourceAttributes.SERVICE_VERSION]: process.env['npm_package_version'] ?? '1.0.0',
-    [SemanticResourceAttributes.DEPLOYMENT_ENVIRONMENT]: config.NODE_ENV,
+  const resource = resourceFromAttributes({
+    [ATTR_SERVICE_NAME]: config.OTEL_SERVICE_NAME,
+    [ATTR_SERVICE_VERSION]: process.env['npm_package_version'] ?? '1.0.0',
+    [SEMRESATTRS_DEPLOYMENT_ENVIRONMENT]: config.NODE_ENV,
     'aws.region': config.AWS_REGION,
     'region.key': config.REGION_KEY,
-    'region.is_primary': config.IS_PRIMARY_REGION,
+    'region.is_primary': String(config.IS_PRIMARY_REGION),
     'region.tier': config.REGION_TIER,
   });
 
@@ -49,7 +53,10 @@ export function initTracing(): void {
         },
         // Configure HTTP instrumentation
         '@opentelemetry/instrumentation-http': {
-          ignoreIncomingPaths: ['/health', '/health/live', '/health/ready', '/metrics'],
+          ignoreIncomingRequestHook: (request) => {
+            const url = request.url ?? '';
+            return url.startsWith('/health') || url.startsWith('/metrics');
+          },
         },
       }),
     ],

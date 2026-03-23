@@ -3,6 +3,7 @@
 // =============================================================================
 
 import { describe, it, expect } from 'vitest';
+import { faker } from '@faker-js/faker';
 import {
   createOrderSchema,
   paginationSchema,
@@ -10,185 +11,275 @@ import {
   notificationEventSchema,
 } from '@blueprint/shared';
 
-const VALID_UUID = '550e8400-e29b-41d4-a716-446655440000';
-const VALID_UUID_2 = '550e8400-e29b-41d4-a716-446655440001';
+faker.seed(54321);
 
-describe('createOrderSchema', () => {
-  const validInput = {
-    customerId: VALID_UUID,
+function buildValidOrderInput() {
+  return {
+    customerId: faker.string.uuid(),
     items: [
       {
-        productId: VALID_UUID_2,
-        productName: 'Widget',
-        quantity: 2,
-        unitPrice: 10.0,
-        totalPrice: 20.0,
+        productId: faker.string.uuid(),
+        productName: faker.commerce.productName(),
+        quantity: faker.number.int({ min: 1, max: 100 }),
+        unitPrice: faker.number.float({ min: 0.01, max: 1000, fractionDigits: 2 }),
+        totalPrice: faker.number.float({ min: 0.01, max: 10000, fractionDigits: 2 }),
       },
     ],
     shippingAddress: {
-      street: '123 Main St',
-      city: 'Springfield',
-      state: 'IL',
-      country: 'US',
-      postalCode: '62704',
+      street: faker.location.streetAddress(),
+      city: faker.location.city(),
+      state: faker.location.state({ abbreviated: true }),
+      country: faker.location.countryCode('alpha-2'),
+      postalCode: faker.location.zipCode(),
     },
   };
+}
 
+describe('createOrderSchema', () => {
   it('should accept valid order input', () => {
-    const result = createOrderSchema.safeParse(validInput);
+    // Arrange
+    const input = buildValidOrderInput();
+
+    // Act
+    const result = createOrderSchema.safeParse(input);
+
+    // Assert
     expect(result.success).toBe(true);
   });
 
   it('should reject non-UUID customerId', () => {
-    const result = createOrderSchema.safeParse({
-      ...validInput,
-      customerId: 'not-a-uuid',
-    });
+    // Arrange
+    const input = { ...buildValidOrderInput(), customerId: faker.string.alpha(10) };
+
+    // Act
+    const result = createOrderSchema.safeParse(input);
+
+    // Assert
     expect(result.success).toBe(false);
   });
 
   it('should reject empty items array', () => {
-    const result = createOrderSchema.safeParse({
-      ...validInput,
-      items: [],
-    });
+    // Arrange
+    const input = { ...buildValidOrderInput(), items: [] };
+
+    // Act
+    const result = createOrderSchema.safeParse(input);
+
+    // Assert
     expect(result.success).toBe(false);
   });
 
   it('should reject negative quantity', () => {
-    const result = createOrderSchema.safeParse({
-      ...validInput,
-      items: [{ ...validInput.items[0], quantity: -1 }],
-    });
+    // Arrange
+    const base = buildValidOrderInput();
+    const input = {
+      ...base,
+      items: [{ ...base.items[0]!, quantity: -1 }],
+    };
+
+    // Act
+    const result = createOrderSchema.safeParse(input);
+
+    // Assert
     expect(result.success).toBe(false);
   });
 
   it('should reject missing shipping address fields', () => {
-    const result = createOrderSchema.safeParse({
-      ...validInput,
-      shippingAddress: { street: '123 Main' },
-    });
+    // Arrange
+    const input = {
+      ...buildValidOrderInput(),
+      shippingAddress: { street: faker.location.streetAddress() },
+    };
+
+    // Act
+    const result = createOrderSchema.safeParse(input);
+
+    // Assert
     expect(result.success).toBe(false);
   });
 
   it('should reject country code longer than 2 chars', () => {
-    const result = createOrderSchema.safeParse({
-      ...validInput,
-      shippingAddress: { ...validInput.shippingAddress, country: 'USA' },
-    });
+    // Arrange
+    const base = buildValidOrderInput();
+    const input = {
+      ...base,
+      shippingAddress: {
+        ...base.shippingAddress,
+        country: faker.location.countryCode('alpha-3'),
+      },
+    };
+
+    // Act
+    const result = createOrderSchema.safeParse(input);
+
+    // Assert
     expect(result.success).toBe(false);
   });
 
   it('should accept optional metadata', () => {
-    const result = createOrderSchema.safeParse({
-      ...validInput,
-      metadata: { source: 'web', campaign: 'summer' },
-    });
+    // Arrange
+    const input = {
+      ...buildValidOrderInput(),
+      metadata: {
+        source: faker.internet.domainWord(),
+        campaign: faker.commerce.department(),
+      },
+    };
+
+    // Act
+    const result = createOrderSchema.safeParse(input);
+
+    // Assert
     expect(result.success).toBe(true);
   });
 
   it('should reject metadata with more than 50 keys', () => {
+    // Arrange
     const bigMetadata: Record<string, string> = {};
     for (let i = 0; i < 51; i++) {
-      bigMetadata[`key${i}`] = 'value';
+      bigMetadata[`key${i}`] = faker.string.alpha(5);
     }
-    const result = createOrderSchema.safeParse({
-      ...validInput,
-      metadata: bigMetadata,
-    });
+    const input = { ...buildValidOrderInput(), metadata: bigMetadata };
+
+    // Act
+    const result = createOrderSchema.safeParse(input);
+
+    // Assert
     expect(result.success).toBe(false);
   });
 });
 
 describe('paginationSchema', () => {
   it('should provide defaults', () => {
+    // Arrange & Act
     const result = paginationSchema.parse({});
+
+    // Assert
     expect(result.page).toBe(1);
     expect(result.limit).toBe(20);
     expect(result.sortOrder).toBe('desc');
   });
 
   it('should coerce string numbers', () => {
-    const result = paginationSchema.parse({ page: '3', limit: '50' });
-    expect(result.page).toBe(3);
-    expect(result.limit).toBe(50);
+    // Arrange
+    const page = faker.number.int({ min: 1, max: 50 });
+    const limit = faker.number.int({ min: 1, max: 100 });
+
+    // Act
+    const result = paginationSchema.parse({ page: String(page), limit: String(limit) });
+
+    // Assert
+    expect(result.page).toBe(page);
+    expect(result.limit).toBe(limit);
   });
 
   it('should reject limit over 100', () => {
-    const result = paginationSchema.safeParse({ limit: 101 });
+    // Arrange
+    const limit = faker.number.int({ min: 101, max: 999 });
+
+    // Act
+    const result = paginationSchema.safeParse({ limit });
+
+    // Assert
     expect(result.success).toBe(false);
   });
 
   it('should reject page zero', () => {
+    // Arrange & Act
     const result = paginationSchema.safeParse({ page: 0 });
+
+    // Assert
     expect(result.success).toBe(false);
   });
 });
 
 describe('orderEventSchema', () => {
   it('should accept valid order event', () => {
+    // Arrange
     const event = {
-      id: VALID_UUID,
+      id: faker.string.uuid(),
       type: 'order.created',
-      timestamp: new Date().toISOString(),
-      source: 'test-service',
+      timestamp: faker.date.recent().toISOString(),
+      source: faker.internet.domainWord(),
       region: 'us-east-1',
       data: {
-        orderId: VALID_UUID,
-        customerId: VALID_UUID_2,
+        orderId: faker.string.uuid(),
+        customerId: faker.string.uuid(),
       },
     };
+
+    // Act
     const result = orderEventSchema.safeParse(event);
+
+    // Assert
     expect(result.success).toBe(true);
   });
 
   it('should reject unknown event type', () => {
+    // Arrange
     const event = {
-      id: VALID_UUID,
+      id: faker.string.uuid(),
       type: 'order.unknown',
-      timestamp: new Date().toISOString(),
-      source: 'test',
+      timestamp: faker.date.recent().toISOString(),
+      source: faker.internet.domainWord(),
       region: 'us-east-1',
-      data: { orderId: VALID_UUID, customerId: VALID_UUID_2 },
+      data: {
+        orderId: faker.string.uuid(),
+        customerId: faker.string.uuid(),
+      },
     };
+
+    // Act
     const result = orderEventSchema.safeParse(event);
+
+    // Assert
     expect(result.success).toBe(false);
   });
 });
 
 describe('notificationEventSchema', () => {
   it('should accept valid email notification', () => {
+    // Arrange
     const event = {
-      id: VALID_UUID,
+      id: faker.string.uuid(),
       type: 'notification.email',
-      timestamp: new Date().toISOString(),
-      source: 'test-service',
+      timestamp: faker.date.recent().toISOString(),
+      source: faker.internet.domainWord(),
       region: 'us-east-1',
       data: {
-        recipientId: VALID_UUID,
-        recipientEmail: 'user@example.com',
-        body: 'Hello',
-        subject: 'Test',
+        recipientId: faker.string.uuid(),
+        recipientEmail: faker.internet.email(),
+        body: faker.lorem.paragraph(),
+        subject: faker.lorem.sentence(),
       },
     };
+
+    // Act
     const result = notificationEventSchema.safeParse(event);
+
+    // Assert
     expect(result.success).toBe(true);
   });
 
   it('should reject invalid email format', () => {
+    // Arrange
     const event = {
-      id: VALID_UUID,
+      id: faker.string.uuid(),
       type: 'notification.email',
-      timestamp: new Date().toISOString(),
-      source: 'test',
+      timestamp: faker.date.recent().toISOString(),
+      source: faker.internet.domainWord(),
       region: 'us-east-1',
       data: {
-        recipientId: VALID_UUID,
-        recipientEmail: 'not-an-email',
-        body: 'Hello',
+        recipientId: faker.string.uuid(),
+        recipientEmail: faker.string.alpha(10),
+        body: faker.lorem.paragraph(),
       },
     };
+
+    // Act
     const result = notificationEventSchema.safeParse(event);
+
+    // Assert
     expect(result.success).toBe(false);
   });
 });

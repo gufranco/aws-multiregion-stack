@@ -115,7 +115,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: pnpm
           cache-dependency-path: app/pnpm-lock.yaml
 
@@ -145,7 +145,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: pnpm
           cache-dependency-path: app/pnpm-lock.yaml
 
@@ -178,7 +178,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: pnpm
           cache-dependency-path: app/pnpm-lock.yaml
 
@@ -229,7 +229,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: pnpm
           cache-dependency-path: app/pnpm-lock.yaml
 
@@ -237,8 +237,7 @@ jobs:
         run: cd app && pnpm install --frozen-lockfile
 
       - name: pnpm audit
-        run: cd app && pnpm audit --audit-level=critical
-        continue-on-error: true
+        run: cd app && pnpm audit --audit-level=high
 
       - name: Trivy filesystem scan
         uses: aquasecurity/trivy-action@0.28.0
@@ -276,13 +275,14 @@ jobs:
           echo "Security Audit: ${{ needs.security-audit.result }}"
 
           # Fail if any required job failed
-          # terraform-security and security-audit are advisory (continue-on-error)
+          # terraform-security is advisory (continue-on-error)
           if [[ "${{ needs.iac-fmt.result }}" == "failure" ]] || \
              [[ "${{ needs.iac-validate.result }}" == "failure" ]] || \
              [[ "${{ needs.app-build.result }}" == "failure" ]] || \
              [[ "${{ needs.app-lint.result }}" == "failure" ]] || \
              [[ "${{ needs.app-test.result }}" == "failure" ]] || \
-             [[ "${{ needs.docker-build.result }}" == "failure" ]]; then
+             [[ "${{ needs.docker-build.result }}" == "failure" ]] || \
+             [[ "${{ needs.security-audit.result }}" == "failure" ]]; then
             echo "::error::One or more required jobs failed"
             exit 1
           fi

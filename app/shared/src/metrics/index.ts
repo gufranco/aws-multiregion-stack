@@ -23,15 +23,15 @@ const cloudwatchClient = new CloudWatchClient({
 const NAMESPACE = `${config.PROJECT_NAME || 'MultiRegion'}/${config.NODE_ENV}`;
 
 export interface MetricDimension {
-  Name: string;
-  Value: string;
+  readonly Name: string;
+  readonly Value: string;
 }
 
 export interface MetricData {
-  metricName: string;
-  value: number;
-  unit?: 'Count' | 'Seconds' | 'Milliseconds' | 'Percent' | 'Bytes' | 'None';
-  dimensions?: MetricDimension[];
+  readonly metricName: string;
+  readonly value: number;
+  readonly unit?: 'Count' | 'Seconds' | 'Milliseconds' | 'Percent' | 'Bytes' | 'None';
+  readonly dimensions?: readonly MetricDimension[];
 }
 
 export async function publishMetric(metric: MetricData): Promise<void> {
@@ -188,13 +188,12 @@ export const BusinessMetrics = {
 
 // Attach a start timestamp before the request is processed.
 // Use as: fastify.addHook('onRequest', metricsOnRequest)
-export function metricsOnRequest(
-  request: { method: string; url: string; startTime?: number },
-  _reply: unknown,
-  done: () => void,
-): void {
+export async function metricsOnRequest(request: {
+  method: string;
+  url: string;
+  startTime?: number;
+}): Promise<void> {
   request.startTime = Date.now();
-  done();
 }
 
 // Measure the full request duration after the response is sent.

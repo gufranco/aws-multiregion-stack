@@ -26,14 +26,14 @@ const OUTBOX_KEY_PREFIX = 'OUTBOX#';
 const MAX_ITEMS_PER_SWEEP = 25;
 
 interface OutboxRecord {
-  pk: string;
-  sk: string;
-  eventId: string;
-  eventType: string;
-  payload: string;
-  correlationId: string | null;
-  createdAt: string;
-  publishedAt: string | null;
+  readonly pk: string;
+  readonly sk: string;
+  readonly eventId: string;
+  readonly eventType: string;
+  readonly payload: string;
+  readonly correlationId: string | null;
+  readonly createdAt: string;
+  readonly publishedAt: string | null;
 }
 
 export async function sweepOutboxEvents(): Promise<number> {

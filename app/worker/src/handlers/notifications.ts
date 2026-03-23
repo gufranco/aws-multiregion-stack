@@ -33,9 +33,10 @@ export async function processNotificationMessage(message: Message): Promise<void
   // Parse SNS wrapper if present
   let eventData: unknown;
   try {
-    const body = JSON.parse(message.Body);
-    if (body.Message) {
-      eventData = JSON.parse(body.Message);
+    const body: unknown = JSON.parse(message.Body);
+    const snsWrapper = body as { Message?: string } | undefined;
+    if (snsWrapper?.Message) {
+      eventData = JSON.parse(snsWrapper.Message);
     } else {
       eventData = body;
     }
@@ -49,7 +50,7 @@ export async function processNotificationMessage(message: Message): Promise<void
   const parseResult = notificationEventSchema.safeParse(eventData);
   if (!parseResult.success) {
     logger.error(
-      { errors: parseResult.error.errors, event: eventData },
+      { errors: parseResult.error.issues, event: eventData },
       'Invalid notification event',
     );
     throw new Error('Invalid notification event format');

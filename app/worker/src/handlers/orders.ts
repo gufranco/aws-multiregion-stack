@@ -24,10 +24,11 @@ export async function processOrderMessage(message: Message): Promise<void> {
   // Parse SNS wrapper if present
   let eventData: unknown;
   try {
-    const body = JSON.parse(message.Body);
+    const body: unknown = JSON.parse(message.Body);
+    const snsWrapper = body as { Message?: string } | undefined;
     // SNS wraps the message
-    if (body.Message) {
-      eventData = JSON.parse(body.Message);
+    if (snsWrapper?.Message) {
+      eventData = JSON.parse(snsWrapper.Message);
     } else {
       eventData = body;
     }
@@ -40,7 +41,7 @@ export async function processOrderMessage(message: Message): Promise<void> {
   // Validate event
   const parseResult = orderEventSchema.safeParse(eventData);
   if (!parseResult.success) {
-    logger.error({ errors: parseResult.error.errors, event: eventData }, 'Invalid order event');
+    logger.error({ errors: parseResult.error.issues, event: eventData }, 'Invalid order event');
     throw new Error('Invalid order event format');
   }
 

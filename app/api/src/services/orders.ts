@@ -69,8 +69,8 @@ const CACHE_PREFIX = 'order:';
 const CACHE_TTL_SECONDS = 300; // 5 minutes
 
 interface CreateOrderOptions {
-  idempotencyKey?: string;
-  correlationId?: string;
+  readonly idempotencyKey?: string;
+  readonly correlationId?: string;
 }
 
 class OrderService {
@@ -132,7 +132,7 @@ class OrderService {
     };
 
     // Atomic write: order + outbox event (+ idempotency record if key provided)
-    const transactItems: TransactWriteItem[] = [
+    const baseItems: TransactWriteItem[] = [
       {
         put: {
           tableName: ORDERS_TABLE,
@@ -163,21 +163,25 @@ class OrderService {
       },
     ];
 
-    if (idempotencyKey) {
-      transactItems.push({
-        put: {
-          tableName: ORDERS_TABLE,
-          item: {
-            pk: `${IDEMPOTENCY_KEY_PREFIX}${idempotencyKey}`,
-            sk: `${IDEMPOTENCY_KEY_PREFIX}${idempotencyKey}`,
-            orderId,
-            createdAt: now.toISOString(),
-            ttl: Math.floor(now.getTime() / 1000) + 86400,
+    const idempotencyItem: TransactWriteItem[] = idempotencyKey
+      ? [
+          {
+            put: {
+              tableName: ORDERS_TABLE,
+              item: {
+                pk: `${IDEMPOTENCY_KEY_PREFIX}${idempotencyKey}`,
+                sk: `${IDEMPOTENCY_KEY_PREFIX}${idempotencyKey}`,
+                orderId,
+                createdAt: now.toISOString(),
+                ttl: Math.floor(now.getTime() / 1000) + 86400,
+              },
+              conditionExpression: 'attribute_not_exists(pk)',
+            },
           },
-          conditionExpression: 'attribute_not_exists(pk)',
-        },
-      });
-    }
+        ]
+      : [];
+
+    const transactItems: TransactWriteItem[] = [...baseItems, ...idempotencyItem];
 
     try {
       await transactWriteItems(transactItems);
@@ -261,7 +265,9 @@ class OrderService {
     let exclusiveStartKey: Record<string, unknown> | undefined;
     if (cursor) {
       try {
-        exclusiveStartKey = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf-8'));
+        exclusiveStartKey = JSON.parse(
+          Buffer.from(cursor, 'base64url').toString('utf-8'),
+        ) as Record<string, unknown>;
       } catch {
         throw new ValidationError('Invalid pagination cursor');
       }

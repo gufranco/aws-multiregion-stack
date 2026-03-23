@@ -65,9 +65,9 @@ function loadConfig(): Env {
   if (!result.success) {
     // eslint-disable-next-line no-console -- logger depends on config, so console is the only option here
     console.error('Invalid environment variables:');
-    for (const error of result.error.errors) {
+    for (const issue of result.error.issues) {
       // eslint-disable-next-line no-console
-      console.error(`  ${error.path.join('.')}: ${error.message}`);
+      console.error(`  ${issue.path.join('.')}: ${issue.message}`);
     }
     throw new Error('Invalid environment configuration');
   }
